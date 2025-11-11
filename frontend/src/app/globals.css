@@ -72,6 +72,26 @@
   z-index: 0;
 }
 
+/* Zoom-responsive Leaflet popup styles */
+.leaflet-popup-zoom-responsive {
+  transition: max-width 0.2s ease;
+}
+
+@media (max-width: 640px) {
+  .leaflet-popup-content-wrapper {
+    max-width: 90vw !important;
+  }
+  
+  .leaflet-popup-content {
+    margin: 8px 10px !important;
+  }
+  
+  .leaflet-popup-tip {
+    width: 12px !important;
+    height: 12px !important;
+  }
+}
+
 /* Hide scrollbar but keep functionality */
 .scrollbar-hide {
   -ms-overflow-style: none;

@@ -89,6 +89,43 @@ export default function MapComponent({ locations }: MapComponentProps) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
+    // Function to calculate popup max width based on zoom level
+    // Zoom levels typically range from 1-18, with 12 being a good default
+    const getPopupMaxWidth = (zoom: number): number => {
+      // Base size at zoom 12, scales proportionally
+      // At zoom 12: ~280px, at zoom 8: ~140px, at zoom 16: ~560px
+      const baseZoom = 12;
+      const baseWidth = 280;
+      const scaleFactor = Math.pow(2, (zoom - baseZoom) / 2);
+      return Math.max(150, Math.min(600, baseWidth * scaleFactor));
+    };
+
+    // Function to update popup size when zoom changes
+    const updatePopupSizes = () => {
+      const zoom = map.getZoom();
+      const maxWidth = getPopupMaxWidth(zoom);
+      
+      // Update all open popups by directly modifying their DOM elements
+      map.eachLayer((layer) => {
+        if (layer instanceof L.Marker && layer.isPopupOpen()) {
+          const popup = layer.getPopup();
+          if (popup) {
+            const popupElement = popup.getElement();
+            if (popupElement) {
+              const wrapper = popupElement.closest('.leaflet-popup-content-wrapper') as HTMLElement;
+              if (wrapper) {
+                wrapper.style.maxWidth = `${maxWidth}px`;
+              }
+            }
+          }
+        }
+      });
+    };
+
+    // Listen to zoom events
+    map.on('zoomend', updatePopupSizes);
+    map.on('zoom', updatePopupSizes);
+
     // Add markers
     validLocations.forEach((location) => {
       if (!location.lat || !location.lng) return;
@@ -101,7 +138,7 @@ export default function MapComponent({ locations }: MapComponentProps) {
 
       // Create popup content
       const popupContent = document.createElement("div");
-      popupContent.className = "p-2";
+      popupContent.className = "p-2 sm:p-3";
       
       if (isAvailable) {
         // Group slots by court
@@ -114,10 +151,10 @@ export default function MapComponent({ locations }: MapComponentProps) {
         }, {} as Record<string, typeof location.availableSlots>);
 
         popupContent.innerHTML = `
-          <h3 class="font-bold text-lg mb-1">${location.name}</h3>
-          ${location.address ? `<p class="text-sm text-gray-600 mb-3">${location.address}</p>` : ""}
-          <div class="space-y-3">
-            <div class="flex items-center justify-between text-sm">
+          <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
+          ${location.address ? `<p class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">${location.address}</p>` : ""}
+          <div class="space-y-2 sm:space-y-3">
+            <div class="flex items-center justify-between text-xs sm:text-sm">
               <span class="font-semibold">${location.availableSlots.length} available slots</span>
               <span class="text-gray-600">$${(location.availableSlots[0]?.price_cents || 0) / 100}/hr</span>
             </div>
@@ -127,7 +164,7 @@ export default function MapComponent({ locations }: MapComponentProps) {
                   const courtType = slots[0]?.court_type;
                   const courtTypeLabel = courtType === "pickleball" ? "Pickleball" : courtType === "tennis" ? "Tennis" : "";
                   const courtTypeBadge = courtTypeLabel
-                    ? `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded ml-2 ${
+                    ? `<span class="inline-block px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded ml-1 sm:ml-2 ${
                         courtType === "pickleball"
                           ? "bg-purple-100 text-purple-700 border border-purple-200"
                           : "bg-blue-100 text-blue-700 border border-blue-200"
@@ -140,18 +177,18 @@ export default function MapComponent({ locations }: MapComponentProps) {
                     .map((slot) => {
                       const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
                       const duration = slot.duration_minutes;
-                      const durationHtml = duration ? `<span class="block text-[10px] text-green-600 mt-0.5">${duration} min</span>` : "";
-                      const buttonContent = `<span class="block font-medium">${timeStr}</span>${durationHtml}`;
+                      const durationHtml = duration ? `<span class="block text-[9px] sm:text-[10px] text-green-600 mt-0.5">${duration} min</span>` : "";
+                      const buttonContent = `<span class="block font-medium text-[11px] sm:text-xs">${timeStr}</span>${durationHtml}`;
                       return websiteUrl
-                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-col items-center justify-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors min-w-[60px]">${buttonContent}</a>`
-                        : `<span class="inline-flex flex-col items-center justify-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded min-w-[60px]">${buttonContent}</span>`;
+                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded hover:bg-green-200 cursor-pointer transition-colors min-w-[50px] sm:min-w-[60px]">${buttonContent}</a>`
+                        : `<span class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded min-w-[50px] sm:min-w-[60px]">${buttonContent}</span>`;
                     })
                     .join("");
                   
                   return `
-              <div class="border-t pt-2">
-                <div class="flex items-center mb-1">
-                  <p class="font-semibold text-sm">${courtName}</p>
+              <div class="border-t pt-1.5 sm:pt-2">
+                <div class="flex items-center mb-1 flex-wrap">
+                  <p class="font-semibold text-xs sm:text-sm">${courtName}</p>
                   ${courtTypeBadge}
                 </div>
                 <div class="flex flex-wrap gap-1">
@@ -166,17 +203,24 @@ export default function MapComponent({ locations }: MapComponentProps) {
         `;
       } else {
         popupContent.innerHTML = `
-          <h3 class="font-bold text-lg mb-1">${location.name}</h3>
-          ${location.address ? `<p class="text-sm text-gray-600 mb-3">${location.address}</p>` : ""}
-          <div class="mt-3">
-            <p class="text-sm text-red-600 font-semibold">No courts available for this date</p>
+          <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
+          ${location.address ? `<p class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">${location.address}</p>` : ""}
+          <div class="mt-2 sm:mt-3">
+            <p class="text-xs sm:text-sm text-red-600 font-semibold">No courts available for this date</p>
           </div>
         `;
       }
 
+      // Get initial popup width based on current zoom
+      const initialZoom = map.getZoom();
+      const initialMaxWidth = getPopupMaxWidth(initialZoom);
+
       const marker = L.marker([location.lat, location.lng], { icon: markerIcon })
         .addTo(map)
-        .bindPopup(popupContent, { maxWidth: 300 });
+        .bindPopup(popupContent, { 
+          maxWidth: initialMaxWidth,
+          className: "leaflet-popup-zoom-responsive"
+        });
     });
 
     mapRef.current = map;
