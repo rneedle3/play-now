@@ -18,6 +18,34 @@ const icon = L.icon({
   shadowSize: [41, 41],
 });
 
+// Red X icon for unavailable locations
+const unavailableIcon = L.divIcon({
+  className: "unavailable-marker",
+  html: `
+    <div style="
+      width: 30px;
+      height: 30px;
+      background-color: #ef4444;
+      border: 3px solid white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    ">
+      <span style="
+        color: white;
+        font-size: 18px;
+        font-weight: bold;
+        line-height: 1;
+      ">✕</span>
+    </div>
+  `,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -15],
+});
+
 interface MapComponentProps {
   locations: LocationWithSlots[];
 }
@@ -65,14 +93,8 @@ export default function MapComponent({ locations }: MapComponentProps) {
     validLocations.forEach((location) => {
       if (!location.lat || !location.lng) return;
 
-      // Group slots by court
-      const courtSlots = location.availableSlots.reduce((acc, slot) => {
-        if (!acc[slot.court_name]) {
-          acc[slot.court_name] = [];
-        }
-        acc[slot.court_name].push(slot);
-        return acc;
-      }, {} as Record<string, typeof location.availableSlots>);
+      const isAvailable = location.availableSlots.length > 0;
+      const markerIcon = isAvailable ? icon : unavailableIcon;
 
       // Get website URL for this location
       const websiteUrl = getLocationWebsiteUrl(location.name);
@@ -80,59 +102,79 @@ export default function MapComponent({ locations }: MapComponentProps) {
       // Create popup content
       const popupContent = document.createElement("div");
       popupContent.className = "p-2";
-      popupContent.innerHTML = `
-        <h3 class="font-bold text-lg mb-1">${location.name}</h3>
-        ${location.address ? `<p class="text-sm text-gray-600 mb-3">${location.address}</p>` : ""}
-        <div class="space-y-3">
-          <div class="flex items-center justify-between text-sm">
-            <span class="font-semibold">${location.availableSlots.length} available slots</span>
-            <span class="text-gray-600">$${(location.availableSlots[0]?.price_cents || 0) / 100}/hr</span>
-          </div>
-          ${Object.entries(courtSlots)
-            .map(
-              ([courtName, slots]) => {
-                const courtType = slots[0]?.court_type;
-                const courtTypeLabel = courtType === "pickleball" ? "Pickleball" : courtType === "tennis" ? "Tennis" : "";
-                const courtTypeBadge = courtTypeLabel
-                  ? `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded ml-2 ${
-                      courtType === "pickleball"
-                        ? "bg-purple-100 text-purple-700 border border-purple-200"
-                        : "bg-blue-100 text-blue-700 border border-blue-200"
-                    }">${courtTypeLabel}</span>`
-                  : "";
-                return `
-            <div class="border-t pt-2">
-              <div class="flex items-center mb-1">
-                <p class="font-semibold text-sm">${courtName}</p>
-                ${courtTypeBadge}
-              </div>
-              <div class="flex flex-wrap gap-1">
-                ${slots
-                  .slice(0, 6)
-                  .map(
-                    (slot, index) => {
-                      const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
-                      return websiteUrl
-                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors" data-slot-index="${index}">${timeStr}</a>`
-                        : `<span class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">${timeStr}</span>`;
-                    }
-                  )
-                  .join("")}
-                ${
-                  slots.length > 6
-                    ? `<span class="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">+${slots.length - 6} more</span>`
-                    : ""
-                }
-              </div>
-            </div>
-          `;
-              }
-            )
-            .join("")}
-        </div>
-      `;
+      
+      if (isAvailable) {
+        // Group slots by court
+        const courtSlots = location.availableSlots.reduce((acc, slot) => {
+          if (!acc[slot.court_name]) {
+            acc[slot.court_name] = [];
+          }
+          acc[slot.court_name].push(slot);
+          return acc;
+        }, {} as Record<string, typeof location.availableSlots>);
 
-      const marker = L.marker([location.lat, location.lng], { icon })
+        popupContent.innerHTML = `
+          <h3 class="font-bold text-lg mb-1">${location.name}</h3>
+          ${location.address ? `<p class="text-sm text-gray-600 mb-3">${location.address}</p>` : ""}
+          <div class="space-y-3">
+            <div class="flex items-center justify-between text-sm">
+              <span class="font-semibold">${location.availableSlots.length} available slots</span>
+              <span class="text-gray-600">$${(location.availableSlots[0]?.price_cents || 0) / 100}/hr</span>
+            </div>
+            ${Object.entries(courtSlots)
+              .map(
+                ([courtName, slots]) => {
+                  const courtType = slots[0]?.court_type;
+                  const courtTypeLabel = courtType === "pickleball" ? "Pickleball" : courtType === "tennis" ? "Tennis" : "";
+                  const courtTypeBadge = courtTypeLabel
+                    ? `<span class="inline-block px-2 py-0.5 text-xs font-medium rounded ml-2 ${
+                        courtType === "pickleball"
+                          ? "bg-purple-100 text-purple-700 border border-purple-200"
+                          : "bg-blue-100 text-blue-700 border border-blue-200"
+                      }">${courtTypeLabel}</span>`
+                    : "";
+                  return `
+              <div class="border-t pt-2">
+                <div class="flex items-center mb-1">
+                  <p class="font-semibold text-sm">${courtName}</p>
+                  ${courtTypeBadge}
+                </div>
+                <div class="flex flex-wrap gap-1">
+                  ${slots
+                    .slice(0, 6)
+                    .map(
+                      (slot, index) => {
+                        const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                        return websiteUrl
+                          ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors" data-slot-index="${index}">${timeStr}</a>`
+                          : `<span class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">${timeStr}</span>`;
+                      }
+                    )
+                    .join("")}
+                  ${
+                    slots.length > 6
+                      ? `<span class="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">+${slots.length - 6} more</span>`
+                      : ""
+                  }
+                </div>
+              </div>
+            `;
+                }
+              )
+              .join("")}
+          </div>
+        `;
+      } else {
+        popupContent.innerHTML = `
+          <h3 class="font-bold text-lg mb-1">${location.name}</h3>
+          ${location.address ? `<p class="text-sm text-gray-600 mb-3">${location.address}</p>` : ""}
+          <div class="mt-3">
+            <p class="text-sm text-red-600 font-semibold">No courts available for this date</p>
+          </div>
+        `;
+      }
+
+      const marker = L.marker([location.lat, location.lng], { icon: markerIcon })
         .addTo(map)
         .bindPopup(popupContent, { maxWidth: 300 });
     });

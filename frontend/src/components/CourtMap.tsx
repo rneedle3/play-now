@@ -63,12 +63,8 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
           ),
         }));
 
-        // Only include locations with available slots
-        const locationsWithAvailability = locationsWithSlots.filter(
-          (loc) => loc.availableSlots.length > 0
-        );
-
-        setLocations(locationsWithAvailability);
+        // Include all locations (both available and unavailable)
+        setLocations(locationsWithSlots);
       } catch (err) {
         console.error("Error fetching court data:", err);
         setError("Failed to load court availability. Please try again.");
@@ -99,12 +95,14 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
     );
   }
 
-  if (locations.length === 0) {
+  // Filter locations with coordinates
+  const locationsWithCoordinates = locations.filter((loc) => loc.lat && loc.lng);
+  
+  if (locationsWithCoordinates.length === 0) {
     return (
       <div className="h-[600px] bg-gray-100 rounded-lg flex items-center justify-center">
         <div className="text-center">
-          <p className="text-gray-600 text-lg">No courts available for {format(selectedDate, "MMMM d, yyyy")}</p>
-          <p className="text-gray-500 text-sm mt-2">Try selecting a different date</p>
+          <p className="text-gray-600 text-lg">No locations found</p>
         </div>
       </div>
     );
@@ -114,7 +112,12 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
-          Found <span className="font-semibold">{locations.length}</span> locations with available courts
+          Showing <span className="font-semibold">{locations.filter(loc => loc.availableSlots.length > 0).length}</span> locations with available courts
+          {locations.filter(loc => loc.availableSlots.length === 0).length > 0 && (
+            <span className="ml-2 text-gray-500">
+              ({locations.filter(loc => loc.availableSlots.length === 0).length} unavailable)
+            </span>
+          )}
         </p>
       </div>
       <MapComponent locations={locations} />
@@ -123,7 +126,7 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-900">Available Courts List</h3>
         <div className="grid gap-4">
-          {locations.map((location) => {
+          {locations.filter(loc => loc.availableSlots.length > 0).map((location) => {
             // Group slots by court
             const courtSlots = location.availableSlots.reduce((acc, slot) => {
               if (!acc[slot.court_name]) {
