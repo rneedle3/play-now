@@ -4,6 +4,7 @@ import { useEffect, useRef, useMemo } from "react";
 import L from "leaflet";
 import { format } from "date-fns";
 import type { LocationWithSlots } from "@/types";
+import { getLocationWebsiteUrl } from "@/lib/locationSlugs";
 import "leaflet/dist/leaflet.css";
 
 // Fix for default marker icon in Next.js
@@ -73,6 +74,9 @@ export default function MapComponent({ locations }: MapComponentProps) {
         return acc;
       }, {} as Record<string, typeof location.availableSlots>);
 
+      // Get website URL for this location
+      const websiteUrl = getLocationWebsiteUrl(location.name);
+
       // Create popup content
       const popupContent = document.createElement("div");
       popupContent.className = "p-2";
@@ -106,11 +110,12 @@ export default function MapComponent({ locations }: MapComponentProps) {
                 ${slots
                   .slice(0, 6)
                   .map(
-                    (slot) => `
-                  <span class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                    ${format(new Date(`2000-01-01T${slot.time}`), "h:mm a")}
-                  </span>
-                `
+                    (slot, index) => {
+                      const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                      return websiteUrl
+                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors" data-slot-index="${index}">${timeStr}</a>`
+                        : `<span class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">${timeStr}</span>`;
+                    }
                   )
                   .join("")}
                 ${
@@ -127,7 +132,7 @@ export default function MapComponent({ locations }: MapComponentProps) {
         </div>
       `;
 
-      L.marker([location.lat, location.lng], { icon })
+      const marker = L.marker([location.lat, location.lng], { icon })
         .addTo(map)
         .bindPopup(popupContent, { maxWidth: 300 });
     });

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
+import { getLocationWebsiteUrl } from "@/lib/locationSlugs";
 import type { LocationWithSlots, Location, Availability } from "@/types";
 
 // Dynamically import map to avoid SSR issues
@@ -175,14 +176,33 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {slots.map((slot) => (
-                            <span
-                              key={slot.id}
-                              className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors"
-                            >
-                              {format(new Date(`2000-01-01T${slot.time}`), "h:mm a")}
-                            </span>
-                          ))}
+                          {slots.map((slot) => {
+                            const websiteUrl = getLocationWebsiteUrl(location.name);
+                            const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                            
+                            if (websiteUrl) {
+                              return (
+                                <a
+                                  key={slot.id}
+                                  href={websiteUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors cursor-pointer"
+                                >
+                                  {timeStr}
+                                </a>
+                              );
+                            }
+                            
+                            return (
+                              <span
+                                key={slot.id}
+                                className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md"
+                              >
+                                {timeStr}
+                              </span>
+                            );
+                          })}
                         </div>
                       </div>
                     );

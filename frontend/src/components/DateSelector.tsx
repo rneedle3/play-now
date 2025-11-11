@@ -12,8 +12,8 @@ export default function DateSelector({ selectedDate, onDateChange }: DateSelecto
   const days = Array.from({ length: 7 }, (_, i) => addDays(startOfDay(new Date()), i));
 
   return (
-    <div className="w-full px-6 py-4">
-      <div className="flex gap-3 justify-center">
+    <div className="w-full px-6 py-6">
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide sm:justify-center pl-1 pr-1 sm:pl-0 sm:pr-0 items-center py-2">
         {days.map((day) => {
           const isSelected = format(day, "yyyy-MM-dd") === format(selectedDate, "yyyy-MM-dd");
           const isToday = format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd");
@@ -23,9 +23,9 @@ export default function DateSelector({ selectedDate, onDateChange }: DateSelecto
               key={day.toISOString()}
               onClick={() => onDateChange(day)}
               className={`
-                flex flex-col items-center w-full max-w-[85px] px-3 py-3 rounded-lg border-2 transition-all shadow-sm
+                flex flex-col items-center justify-center flex-shrink-0 w-[85px] h-[100px] px-4 rounded-lg border-2 transition-all shadow-sm
                 ${isSelected
-                  ? "border-primary bg-primary/10 text-primary shadow-md scale-105"
+                  ? "border-primary bg-primary/10 text-primary shadow-md"
                   : "border-border bg-card text-foreground hover:border-primary/50 hover:shadow"
                 }
               `}

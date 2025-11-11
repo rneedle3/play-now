@@ -4,6 +4,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Play Now - SF Court Availability",
   description: "Real-time tennis and pickleball court availability in San Francisco",
+  icons: {
+    icon: "/play_now.svg",
+  },
 };
 
 export default function RootLayout({
