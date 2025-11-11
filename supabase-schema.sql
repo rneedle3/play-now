@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS availability (
     time TIME NOT NULL,
     price_cents INTEGER DEFAULT 0,
     price_type TEXT DEFAULT 'perHour',
+    duration_minutes INTEGER,
     is_available BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(court_id, slot_datetime)
@@ -50,6 +51,7 @@ COMMENT ON COLUMN availability.date IS 'Date component for easy filtering';
 COMMENT ON COLUMN availability.time IS 'Time component for easy filtering';
 COMMENT ON COLUMN availability.price_cents IS 'Price in cents (e.g., 500 = $5.00)';
 COMMENT ON COLUMN availability.price_type IS 'Pricing type (e.g., perHour)';
+COMMENT ON COLUMN availability.duration_minutes IS 'Duration of the booking slot in minutes (e.g., 30, 60, 90)';
 
 -- Optional: Create a view for easier querying
 CREATE OR REPLACE VIEW availability_with_location AS

@@ -133,6 +133,21 @@ export default function MapComponent({ locations }: MapComponentProps) {
                           : "bg-blue-100 text-blue-700 border border-blue-200"
                       }">${courtTypeLabel}</span>`
                     : "";
+                  
+                  // Sort slots by time and show all individual slots (matching real website behavior)
+                  const sortedSlots = [...slots].sort((a, b) => a.time.localeCompare(b.time));
+                  const slotButtons = sortedSlots
+                    .map((slot) => {
+                      const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                      const duration = slot.duration_minutes;
+                      const durationHtml = duration ? `<span class="block text-[10px] text-green-600 mt-0.5">${duration} min</span>` : "";
+                      const buttonContent = `<span class="block font-medium">${timeStr}</span>${durationHtml}`;
+                      return websiteUrl
+                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-col items-center justify-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors min-w-[60px]">${buttonContent}</a>`
+                        : `<span class="inline-flex flex-col items-center justify-center px-2 py-1 bg-green-100 text-green-800 text-xs rounded min-w-[60px]">${buttonContent}</span>`;
+                    })
+                    .join("");
+                  
                   return `
               <div class="border-t pt-2">
                 <div class="flex items-center mb-1">
@@ -140,22 +155,7 @@ export default function MapComponent({ locations }: MapComponentProps) {
                   ${courtTypeBadge}
                 </div>
                 <div class="flex flex-wrap gap-1">
-                  ${slots
-                    .slice(0, 6)
-                    .map(
-                      (slot, index) => {
-                        const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
-                        return websiteUrl
-                          ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded hover:bg-green-200 cursor-pointer transition-colors" data-slot-index="${index}">${timeStr}</a>`
-                          : `<span class="inline-block px-2 py-1 bg-green-100 text-green-800 text-xs rounded">${timeStr}</span>`;
-                      }
-                    )
-                    .join("")}
-                  ${
-                    slots.length > 6
-                      ? `<span class="inline-block px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">+${slots.length - 6} more</span>`
-                      : ""
-                  }
+                  ${slotButtons}
                 </div>
               </div>
             `;

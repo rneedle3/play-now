@@ -22,6 +22,7 @@ export interface Availability {
   price_cents: number;
   price_type: string;
   court_type: string | null; // "tennis" or "pickleball"
+  duration_minutes: number | null; // Duration of the slot in minutes (e.g., 30, 60, 90)
   is_available: boolean;
   created_at: string;
 }

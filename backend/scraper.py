@@ -4,7 +4,7 @@ Pure scraping logic without any deployment dependencies
 """
 
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Tuple
 
 
@@ -130,11 +130,95 @@ def parse_location_data(location_data: Dict) -> Tuple[Optional[Dict], List[Dict]
             elif sport_id == "bd745b6e-1dd6-43e2-a69f-06f094808a96":
                 court_type = "tennis"
 
-        # Parse each available slot
+        # Extract fixed slot configurations by day of week (to match real website behavior)
+        # The real website only shows slots where the entire duration is available
+        # Format: {day_of_week: list of (start_time, end_time, duration_minutes)}
+        # day_of_week: 0=Monday, 1=Tuesday, ..., 6=Sunday (Python weekday format)
+        fixed_slots_by_day = {}
+        booking_policies = config.get("bookingPolicies", [])
+        for policy in booking_policies:
+            if policy.get("type") == "fixed-slots":
+                slots_config = policy.get("slots", [])
+                for slot_config in slots_config:
+                    day_of_week = slot_config.get("dayOfWeek")  # API uses 1=Monday, 2=Tuesday, etc.
+                    start_time = slot_config.get("startTimeLocal", "")
+                    end_time = slot_config.get("endTimeLocal", "")
+                    if start_time and end_time and day_of_week is not None:
+                        # Convert API dayOfWeek (1=Monday) to Python weekday (0=Monday)
+                        python_weekday = day_of_week - 1
+                        if python_weekday not in fixed_slots_by_day:
+                            fixed_slots_by_day[python_weekday] = []
+                        fixed_slots_by_day[python_weekday].append((start_time, end_time))
+
+        # Create a set of all available slot datetimes for quick lookup
+        # Format: "YYYY-MM-DD HH:MM:SS"
+        available_slot_datetimes = set(available_slots)
+
+        # Parse each available slot, but only include those where the entire fixed slot duration is available
+        # If no fixed slots are configured, include all available slots
         for slot_time in available_slots:
             # slot_time format: "2025-11-11 13:30:00"
             try:
                 dt = datetime.strptime(slot_time, "%Y-%m-%d %H:%M:%S")
+                slot_time_only = dt.strftime("%H:%M:%S")
+                slot_date = dt.strftime("%Y-%m-%d")
+                slot_weekday = dt.weekday()  # 0=Monday, 1=Tuesday, ..., 6=Sunday
+                
+                # Filter: only include slots that match fixed slot start times AND have full duration available
+                duration_minutes = None
+                if fixed_slots_by_day:
+                    day_slots = fixed_slots_by_day.get(slot_weekday, [])
+                    # Check if this time is a start time of a fixed slot
+                    is_valid_start = False
+                    for start_time, end_time in day_slots:
+                        if slot_time_only == start_time:
+                            # Verify that all 30-minute increments within this slot are available for this specific date
+                            # Parse start and end times
+                            start_dt = datetime.strptime(start_time, "%H:%M:%S")
+                            end_dt = datetime.strptime(end_time, "%H:%M:%S")
+                            
+                            # Calculate duration in minutes
+                            duration_minutes = int((end_dt - start_dt).total_seconds() / 60)
+                            
+                            # Check every 30 minutes from start to end (exclusive of end) for this date
+                            current_time = start_dt.time()
+                            end_time_obj = end_dt.time()
+                            all_available = True
+                            
+                            while current_time < end_time_obj:
+                                # Create datetime for this specific date and time
+                                check_datetime = datetime.combine(dt.date(), current_time)
+                                check_datetime_str = check_datetime.strftime("%Y-%m-%d %H:%M:%S")
+                                
+                                if check_datetime_str not in available_slot_datetimes:
+                                    all_available = False
+                                    break
+                                
+                                # Move to next 30-minute increment
+                                current_dt = datetime.combine(dt.date(), current_time)
+                                current_dt += timedelta(minutes=30)
+                                current_time = current_dt.time()
+                            
+                            if all_available:
+                                is_valid_start = True
+                            break
+                    
+                    if not is_valid_start:
+                        continue
+                else:
+                    # If no fixed slots configured, try to determine duration from maxReservationTime or default to 30
+                    max_reservation_time = court.get("maxReservationTime", "00:30:00")
+                    try:
+                        # Parse time like "01:30:00" and calculate minutes
+                        time_parts = max_reservation_time.split(":")
+                        if len(time_parts) >= 2:
+                            hours = int(time_parts[0])
+                            minutes = int(time_parts[1])
+                            duration_minutes = hours * 60 + minutes
+                        else:
+                            duration_minutes = 30
+                    except (ValueError, TypeError, IndexError):
+                        duration_minutes = 30  # Default to 30 minutes if we can't determine
 
                 all_slots.append({
                     "location_id": location["id"],
@@ -147,6 +231,7 @@ def parse_location_data(location_data: Dict) -> Tuple[Optional[Dict], List[Dict]
                     "price_cents": price_cents,
                     "price_type": price_type,
                     "court_type": court_type,
+                    "duration_minutes": duration_minutes,
                     "is_available": True,
                 })
             except ValueError as e:

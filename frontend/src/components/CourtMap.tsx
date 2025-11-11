@@ -179,33 +179,42 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
                           )}
                         </div>
                         <div className="flex flex-wrap gap-2">
-                          {slots.map((slot) => {
-                            const websiteUrl = getLocationWebsiteUrl(location.name);
-                            const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
-                            
-                            if (websiteUrl) {
+                          {slots
+                            .sort((a, b) => a.time.localeCompare(b.time))
+                            .map((slot) => {
+                              const websiteUrl = getLocationWebsiteUrl(location.name);
+                              const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                              const duration = slot.duration_minutes;
+                              
+                              if (websiteUrl) {
+                                return (
+                                  <a
+                                    key={slot.id}
+                                    href={websiteUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors cursor-pointer min-w-[70px]"
+                                  >
+                                    <span className="font-medium">{timeStr}</span>
+                                    {duration && (
+                                      <span className="text-xs text-green-600 mt-0.5">{duration} min</span>
+                                    )}
+                                  </a>
+                                );
+                              }
+                              
                               return (
-                                <a
+                                <span
                                   key={slot.id}
-                                  href={websiteUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors cursor-pointer"
+                                  className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md min-w-[70px]"
                                 >
-                                  {timeStr}
-                                </a>
+                                  <span className="font-medium">{timeStr}</span>
+                                  {duration && (
+                                    <span className="text-xs text-green-600 mt-0.5">{duration} min</span>
+                                  )}
+                                </span>
                               );
-                            }
-                            
-                            return (
-                              <span
-                                key={slot.id}
-                                className="inline-block px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md"
-                              >
-                                {timeStr}
-                              </span>
-                            );
-                          })}
+                            })}
                         </div>
                       </div>
                     );
