@@ -7,15 +7,29 @@ import type { LocationWithSlots } from "@/types";
 import { getLocationWebsiteUrl } from "@/lib/locationSlugs";
 import "leaflet/dist/leaflet.css";
 
-// Fix for default marker icon in Next.js
-const icon = L.icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-  popupAnchor: [1, -34],
-  shadowSize: [41, 41],
+// Green check mark pin icon for available locations
+const availableIcon = L.divIcon({
+  className: "available-marker",
+  html: `
+    <div style="
+      width: 30px;
+      height: 30px;
+      background-color: #22c55e;
+      border: 3px solid white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    ">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 6L9 17L4 12" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  `,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -15],
 });
 
 // Red X icon for unavailable locations
@@ -89,21 +103,21 @@ export default function MapComponent({ locations }: MapComponentProps) {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     }).addTo(map);
 
-    // Function to calculate popup max width based on zoom level
+    // Function to calculate popup size (square) based on zoom level
     // Zoom levels typically range from 1-18, with 12 being a good default
-    const getPopupMaxWidth = (zoom: number): number => {
+    const getPopupSize = (zoom: number): number => {
       // Base size at zoom 12, scales proportionally
       // At zoom 12: ~280px, at zoom 8: ~140px, at zoom 16: ~560px
       const baseZoom = 12;
-      const baseWidth = 280;
+      const baseSize = 280;
       const scaleFactor = Math.pow(2, (zoom - baseZoom) / 2);
-      return Math.max(150, Math.min(600, baseWidth * scaleFactor));
+      return Math.max(200, Math.min(500, baseSize * scaleFactor));
     };
 
     // Function to update popup size when zoom changes
     const updatePopupSizes = () => {
       const zoom = map.getZoom();
-      const maxWidth = getPopupMaxWidth(zoom);
+      const size = getPopupSize(zoom);
       
       // Update all open popups by directly modifying their DOM elements
       map.eachLayer((layer) => {
@@ -114,7 +128,10 @@ export default function MapComponent({ locations }: MapComponentProps) {
             if (popupElement) {
               const wrapper = popupElement.closest('.leaflet-popup-content-wrapper') as HTMLElement;
               if (wrapper) {
-                wrapper.style.maxWidth = `${maxWidth}px`;
+                wrapper.style.width = `${size}px`;
+                wrapper.style.height = `${size}px`;
+                wrapper.style.maxWidth = `${size}px`;
+                wrapper.style.maxHeight = `${size}px`;
               }
             }
           }
@@ -131,14 +148,14 @@ export default function MapComponent({ locations }: MapComponentProps) {
       if (!location.lat || !location.lng) return;
 
       const isAvailable = location.availableSlots.length > 0;
-      const markerIcon = isAvailable ? icon : unavailableIcon;
+      const markerIcon = isAvailable ? availableIcon : unavailableIcon;
 
       // Get website URL for this location
       const websiteUrl = getLocationWebsiteUrl(location.name);
 
-      // Create popup content
+      // Create popup content with square scrollable container
       const popupContent = document.createElement("div");
-      popupContent.className = "p-2 sm:p-3";
+      popupContent.className = "popup-container";
       
       if (isAvailable) {
         // Group slots by court
@@ -151,13 +168,15 @@ export default function MapComponent({ locations }: MapComponentProps) {
         }, {} as Record<string, typeof location.availableSlots>);
 
         popupContent.innerHTML = `
-          <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
-          ${location.address ? `<p class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">${location.address}</p>` : ""}
-          <div class="space-y-2 sm:space-y-3">
-            <div class="flex items-center justify-between text-xs sm:text-sm">
+          <div class="popup-header">
+            <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
+            ${location.address ? `<p class="text-xs sm:text-sm text-gray-600">${location.address}</p>` : ""}
+            <div class="flex items-center justify-between text-xs sm:text-sm mt-2">
               <span class="font-semibold">${location.availableSlots.length} available slots</span>
               <span class="text-gray-600">$${(location.availableSlots[0]?.price_cents || 0) / 100}/hr</span>
             </div>
+          </div>
+          <div class="popup-scrollable">
             ${Object.entries(courtSlots)
               .map(
                 ([courtName, slots]) => {
@@ -203,23 +222,26 @@ export default function MapComponent({ locations }: MapComponentProps) {
         `;
       } else {
         popupContent.innerHTML = `
-          <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
-          ${location.address ? `<p class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">${location.address}</p>` : ""}
-          <div class="mt-2 sm:mt-3">
-            <p class="text-xs sm:text-sm text-red-600 font-semibold">No courts available for this date</p>
+          <div class="popup-header">
+            <h3 class="font-bold text-sm sm:text-lg mb-1">${location.name}</h3>
+            ${location.address ? `<p class="text-xs sm:text-sm text-gray-600 mb-2 sm:mb-3">${location.address}</p>` : ""}
+            <div class="mt-2 sm:mt-3">
+              <p class="text-xs sm:text-sm text-red-600 font-semibold">No courts available for this date</p>
+            </div>
           </div>
         `;
       }
 
-      // Get initial popup width based on current zoom
+      // Get initial popup size based on current zoom
       const initialZoom = map.getZoom();
-      const initialMaxWidth = getPopupMaxWidth(initialZoom);
+      const initialSize = getPopupSize(initialZoom);
 
       const marker = L.marker([location.lat, location.lng], { icon: markerIcon })
         .addTo(map)
         .bindPopup(popupContent, { 
-          maxWidth: initialMaxWidth,
-          className: "leaflet-popup-zoom-responsive"
+          maxWidth: initialSize,
+          maxHeight: initialSize,
+          className: "leaflet-popup-square"
         });
     });
 
