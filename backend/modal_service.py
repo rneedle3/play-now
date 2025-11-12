@@ -112,11 +112,11 @@ def scrape_and_store():
 @app.function(
     image=image,
     secrets=[CUSTOM_SECRET],
-    schedule=modal.Cron("*/30 * * * *"),  # Run every 30 minutes
+    schedule=modal.Cron("*/5 * * * *"),  # Run every 5 minutes
 )
 def scheduled_scrape():
     """
-    Scheduled function that runs every 30 minutes
+    Scheduled function that runs every 5 minutes
     """
     return scrape_and_store.remote()
 
