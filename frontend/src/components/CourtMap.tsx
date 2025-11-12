@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { format } from "date-fns";
 import { supabase } from "@/lib/supabase";
 import { getLocationWebsiteUrl } from "@/lib/locationSlugs";
 import type { LocationWithSlots, Location, Availability } from "@/types";
+import type { SportFilter } from "@/app/page";
 
 // Dynamically import map to avoid SSR issues
 const MapComponent = dynamic(() => import("./MapComponent"), {
@@ -22,9 +23,10 @@ const MapComponent = dynamic(() => import("./MapComponent"), {
 
 interface CourtMapProps {
   selectedDate: Date;
+  sportFilter: SportFilter;
 }
 
-export default function CourtMap({ selectedDate }: CourtMapProps) {
+export default function CourtMap({ selectedDate, sportFilter }: CourtMapProps) {
   const [locations, setLocations] = useState<LocationWithSlots[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +78,25 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
     fetchCourtData();
   }, [selectedDate]);
 
+  // Filter locations based on sport filter (must be before conditional returns)
+  const filteredLocations = useMemo(() => {
+    return locations.map((location) => {
+      let filteredSlots = location.availableSlots;
+      
+      if (sportFilter !== "both") {
+        filteredSlots = location.availableSlots.filter((slot) => {
+          const slotSport = slot.court_type || "";
+          return slotSport === sportFilter;
+        });
+      }
+      
+      return {
+        ...location,
+        availableSlots: filteredSlots,
+      };
+    });
+  }, [locations, sportFilter]);
+
   if (loading) {
     return (
       <div className="h-[600px] bg-gray-100 rounded-lg flex items-center justify-center">
@@ -96,7 +117,7 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
   }
 
   // Filter locations with coordinates
-  const locationsWithCoordinates = locations.filter((loc) => loc.lat && loc.lng);
+  const locationsWithCoordinates = filteredLocations.filter((loc) => loc.lat && loc.lng);
   
   if (locationsWithCoordinates.length === 0) {
     return (
@@ -112,30 +133,21 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-600">
-          Showing <span className="font-semibold">{locations.filter(loc => loc.availableSlots.length > 0).length}</span> locations with available courts
-          {locations.filter(loc => loc.availableSlots.length === 0).length > 0 && (
+          Showing <span className="font-semibold">{filteredLocations.filter(loc => loc.availableSlots.length > 0).length}</span> locations with available courts
+          {filteredLocations.filter(loc => loc.availableSlots.length === 0).length > 0 && (
             <span className="ml-2 text-gray-500">
-              ({locations.filter(loc => loc.availableSlots.length === 0).length} unavailable)
+              ({filteredLocations.filter(loc => loc.availableSlots.length === 0).length} unavailable)
             </span>
           )}
         </p>
       </div>
-      <MapComponent locations={locations} />
+      <MapComponent locations={filteredLocations} />
 
       {/* List View */}
       <div className="space-y-4">
         <h3 className="text-lg font-semibold text-gray-900">Available Courts List</h3>
         <div className="grid gap-4">
-          {locations.filter(loc => loc.availableSlots.length > 0).map((location) => {
-            // Group slots by court
-            const courtSlots = location.availableSlots.reduce((acc, slot) => {
-              if (!acc[slot.court_name]) {
-                acc[slot.court_name] = [];
-              }
-              acc[slot.court_name].push(slot);
-              return acc;
-            }, {} as Record<string, typeof location.availableSlots>);
-
+          {filteredLocations.filter(loc => loc.availableSlots.length > 0).map((location) => {
             return (
               <div
                 key={location.id}
@@ -159,66 +171,92 @@ export default function CourtMap({ selectedDate }: CourtMapProps) {
                 </div>
 
                 <div className="space-y-3">
-                  {Object.entries(courtSlots).map(([courtName, slots]) => {
-                    const courtType = slots[0]?.court_type;
-                    const courtTypeLabel = courtType === "pickleball" ? "Pickleball" : courtType === "tennis" ? "Tennis" : "";
-                    return (
-                      <div key={courtName} className="border-t pt-3">
-                        <div className="flex items-center gap-2 mb-2">
-                          <p className="text-sm font-semibold text-gray-800">
-                            {courtName}
-                          </p>
-                          {courtTypeLabel && (
+                  {Object.entries(
+                    // Group slots by sport type instead of court
+                    location.availableSlots.reduce((acc, slot) => {
+                      const sportType = slot.court_type || "other";
+                      if (!acc[sportType]) {
+                        acc[sportType] = [];
+                      }
+                      acc[sportType].push(slot);
+                      return acc;
+                    }, {} as Record<string, typeof location.availableSlots>)
+                  )
+                    .sort(([sportTypeA], [sportTypeB]) => {
+                      // Sort by sport type: tennis first, then pickleball, then others
+                      const getSortOrder = (type: string) => {
+                        if (type === "tennis") return 0;
+                        if (type === "pickleball") return 1;
+                        return 2;
+                      };
+                      return getSortOrder(sportTypeA) - getSortOrder(sportTypeB);
+                    })
+                    .map(([sportType, slots]) => {
+                      const sportTypeLabel = sportType === "pickleball" ? "Pickleball" : sportType === "tennis" ? "Tennis" : "Other";
+                      return (
+                        <div key={sportType} className="border-t pt-3">
+                          <div className="flex items-center gap-2 mb-2">
                             <span className={`inline-block px-2 py-0.5 text-xs font-medium rounded ${
-                              courtType === "pickleball" 
+                              sportType === "pickleball" 
                                 ? "bg-purple-100 text-purple-700 border border-purple-200"
                                 : "bg-blue-100 text-blue-700 border border-blue-200"
                             }`}>
-                              {courtTypeLabel}
+                              {sportTypeLabel}
                             </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {slots
-                            .sort((a, b) => a.time.localeCompare(b.time))
-                            .map((slot) => {
-                              const websiteUrl = getLocationWebsiteUrl(location.name);
-                              const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
-                              const duration = slot.duration_minutes;
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {(() => {
+                              // Deduplicate slots by time + duration (keep only unique combinations)
+                              const uniqueSlotsMap = slots.reduce((acc, slot) => {
+                                const key = `${slot.time}-${slot.duration_minutes || 'no-duration'}`;
+                                if (!acc.has(key)) {
+                                  acc.set(key, slot);
+                                }
+                                return acc;
+                              }, new Map());
                               
-                              if (websiteUrl) {
+                              // Sort unique slots by time
+                              const uniqueSlots = Array.from(uniqueSlotsMap.values()).sort((a, b) => a.time.localeCompare(b.time));
+                              
+                              return uniqueSlots.map((slot) => {
+                                const websiteUrl = getLocationWebsiteUrl(location.name);
+                                const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                                const duration = slot.duration_minutes;
+                                
+                                if (websiteUrl) {
+                                  return (
+                                    <a
+                                      key={`${slot.time}-${slot.duration_minutes || 'no-duration'}`}
+                                      href={websiteUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors cursor-pointer min-w-[70px]"
+                                    >
+                                      <span className="font-medium">{timeStr}</span>
+                                      {duration && (
+                                        <span className="text-xs text-green-600 mt-0.5">{duration} min</span>
+                                      )}
+                                    </a>
+                                  );
+                                }
+                                
                                 return (
-                                  <a
-                                    key={slot.id}
-                                    href={websiteUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md hover:bg-green-100 transition-colors cursor-pointer min-w-[70px]"
+                                  <span
+                                    key={`${slot.time}-${slot.duration_minutes || 'no-duration'}`}
+                                    className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md min-w-[70px]"
                                   >
                                     <span className="font-medium">{timeStr}</span>
                                     {duration && (
                                       <span className="text-xs text-green-600 mt-0.5">{duration} min</span>
                                     )}
-                                  </a>
+                                  </span>
                                 );
-                              }
-                              
-                              return (
-                                <span
-                                  key={slot.id}
-                                  className="inline-flex flex-col items-center justify-center px-3 py-1.5 bg-green-50 border border-green-200 text-green-700 text-sm rounded-md min-w-[70px]"
-                                >
-                                  <span className="font-medium">{timeStr}</span>
-                                  {duration && (
-                                    <span className="text-xs text-green-600 mt-0.5">{duration} min</span>
-                                  )}
-                                </span>
-                              );
-                            })}
+                              });
+                            })()}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
                 </div>
               </div>
             );

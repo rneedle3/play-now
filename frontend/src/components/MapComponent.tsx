@@ -62,9 +62,10 @@ const unavailableIcon = L.divIcon({
 
 interface MapComponentProps {
   locations: LocationWithSlots[];
+  sportFilter?: "both" | "tennis" | "pickleball";
 }
 
-export default function MapComponent({ locations }: MapComponentProps) {
+export default function MapComponent({ locations, sportFilter = "both" }: MapComponentProps) {
   const mapRef = useRef<L.Map | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -158,12 +159,13 @@ export default function MapComponent({ locations }: MapComponentProps) {
       popupContent.className = "popup-container";
       
       if (isAvailable) {
-        // Group slots by court
-        const courtSlots = location.availableSlots.reduce((acc, slot) => {
-          if (!acc[slot.court_name]) {
-            acc[slot.court_name] = [];
+        // Group slots by sport type instead of court
+        const sportSlots = location.availableSlots.reduce((acc, slot) => {
+          const sportType = slot.court_type || "other";
+          if (!acc[sportType]) {
+            acc[sportType] = [];
           }
-          acc[slot.court_name].push(slot);
+          acc[sportType].push(slot);
           return acc;
         }, {} as Record<string, typeof location.availableSlots>);
 
@@ -177,47 +179,66 @@ export default function MapComponent({ locations }: MapComponentProps) {
             </div>
           </div>
           <div class="popup-scrollable">
-            ${Object.entries(courtSlots)
-              .map(
-                ([courtName, slots]) => {
-                  const courtType = slots[0]?.court_type;
-                  const courtTypeLabel = courtType === "pickleball" ? "Pickleball" : courtType === "tennis" ? "Tennis" : "";
-                  const courtTypeBadge = courtTypeLabel
-                    ? `<span class="inline-block px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded ml-1 sm:ml-2 ${
-                        courtType === "pickleball"
-                          ? "bg-purple-100 text-purple-700 border border-purple-200"
-                          : "bg-blue-100 text-blue-700 border border-blue-200"
-                      }">${courtTypeLabel}</span>`
-                    : "";
+            <div class="space-y-3">
+              ${Object.entries(sportSlots)
+                .sort(([sportTypeA], [sportTypeB]) => {
+                  // Sort by sport type: tennis first, then pickleball, then others
+                  const getSortOrder = (type: string) => {
+                    if (type === "tennis") return 0;
+                    if (type === "pickleball") return 1;
+                    return 2;
+                  };
                   
-                  // Sort slots by time and show all individual slots (matching real website behavior)
-                  const sortedSlots = [...slots].sort((a, b) => a.time.localeCompare(b.time));
-                  const slotButtons = sortedSlots
-                    .map((slot) => {
-                      const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
-                      const duration = slot.duration_minutes;
-                      const durationHtml = duration ? `<span class="block text-[9px] sm:text-[10px] text-green-600 mt-0.5">${duration} min</span>` : "";
-                      const buttonContent = `<span class="block font-medium text-[11px] sm:text-xs">${timeStr}</span>${durationHtml}`;
-                      return websiteUrl
-                        ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded hover:bg-green-200 cursor-pointer transition-colors min-w-[50px] sm:min-w-[60px]">${buttonContent}</a>`
-                        : `<span class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded min-w-[50px] sm:min-w-[60px]">${buttonContent}</span>`;
-                    })
-                    .join("");
-                  
-                  return `
-              <div class="border-t pt-1.5 sm:pt-2">
-                <div class="flex items-center mb-1 flex-wrap">
-                  <p class="font-semibold text-xs sm:text-sm">${courtName}</p>
-                  ${courtTypeBadge}
+                  return getSortOrder(sportTypeA) - getSortOrder(sportTypeB);
+                })
+                .map(
+                  ([sportType, slots]) => {
+                    const sportTypeLabel = sportType === "pickleball" ? "Pickleball" : sportType === "tennis" ? "Tennis" : "Other";
+                    const sportTypeBadge = sportTypeLabel
+                      ? `<span class="inline-block px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded ${
+                          sportType === "pickleball"
+                            ? "bg-purple-100 text-purple-700 border border-purple-200"
+                            : "bg-blue-100 text-blue-700 border border-blue-200"
+                        }">${sportTypeLabel}</span>`
+                      : "";
+                    
+                    // Deduplicate slots by time + duration (keep only unique combinations)
+                    const uniqueSlots = slots.reduce((acc, slot) => {
+                      const key = `${slot.time}-${slot.duration_minutes || 'no-duration'}`;
+                      if (!acc.has(key)) {
+                        acc.set(key, slot);
+                      }
+                      return acc;
+                    }, new Map());
+                    
+                    // Sort unique slots by time
+                    const sortedSlots = Array.from(uniqueSlots.values()).sort((a, b) => a.time.localeCompare(b.time));
+                    const slotButtons = sortedSlots
+                      .map((slot) => {
+                        const timeStr = format(new Date(`2000-01-01T${slot.time}`), "h:mm a");
+                        const duration = slot.duration_minutes;
+                        const durationHtml = duration ? `<span class="block text-[9px] sm:text-[10px] text-green-600 mt-0.5">${duration} min</span>` : "";
+                        const buttonContent = `<span class="block font-medium text-[11px] sm:text-xs">${timeStr}</span>${durationHtml}`;
+                        return websiteUrl
+                          ? `<a href="${websiteUrl}" target="_blank" rel="noopener noreferrer" class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded hover:bg-green-200 cursor-pointer transition-colors min-w-[50px] sm:min-w-[60px]">${buttonContent}</a>`
+                          : `<span class="inline-flex flex-col items-center justify-center px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 text-green-800 text-[11px] sm:text-xs rounded min-w-[50px] sm:min-w-[60px]">${buttonContent}</span>`;
+                      })
+                      .join("");
+                    
+                    return `
+                <div class="court-section">
+                  <div class="flex items-center mb-2 flex-wrap">
+                    ${sportTypeBadge}
+                  </div>
+                  <div class="flex flex-wrap gap-1.5">
+                    ${slotButtons}
+                  </div>
                 </div>
-                <div class="flex flex-wrap gap-1">
-                  ${slotButtons}
-                </div>
-              </div>
-            `;
-                }
-              )
-              .join("")}
+              `;
+                  }
+                )
+                .join("")}
+            </div>
           </div>
         `;
       } else {
